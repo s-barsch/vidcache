@@ -676,19 +676,23 @@ func (m model) viewSummary() string {
 			b.WriteString(dimStyle.Render("(missing)"))
 		}
 
-		if v.HasCaptionEN || v.HasCaptionDE || v.HasScriptEN || v.HasScriptDE {
-			b.WriteString("  ")
+		if v.HasCaptionEN || v.HasCaptionDE {
+			b.WriteString("  💬 ")
 			if v.HasCaptionEN {
-				b.WriteString(ccTagStyle.Render("💬 en"))
+				b.WriteString(ccTagStyle.Render("en"))
 			}
 			if v.HasCaptionDE {
-				b.WriteString(ccTagStyle.Render("💬 de"))
+				b.WriteString(ccTagStyle.Render("de"))
 			}
+		}
+
+		if v.HasScriptEN || v.HasScriptDE {
+			b.WriteString("  📝 ")
 			if v.HasScriptEN {
-				b.WriteString(txTagStyle.Render("📝 en"))
+				b.WriteString(txTagStyle.Render("en"))
 			}
 			if v.HasScriptDE {
-				b.WriteString(txTagStyle.Render("📝 de"))
+				b.WriteString(txTagStyle.Render("de"))
 			}
 		}
 
