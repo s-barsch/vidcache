@@ -649,12 +649,11 @@ func (m model) viewSummary() string {
 			}
 		}
 
-		line := fmt.Sprintf("%s%s %s %-40s %4s  %s  %s",
+		line := fmt.Sprintf("%s%s %s %-30s  %s  %s",
 			cursorStr,
 			selStr,
 			icon,
-			truncate(v.Filename, 40),
-			v.ActualRes.Tag,
+			truncate(v.Filename, 30),
 			orient,
 			dims,
 		)
