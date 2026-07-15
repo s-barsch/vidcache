@@ -92,8 +92,9 @@ func (s VideoStatus) String() string {
 type VideoFile struct {
 	Path         string       // absolute path to the mp4 file
 	Dir          string       // directory containing the file
-	Filename     string       // e.g. "240813_121003-4k.mp4"
-	BaseName     string       // name without extension and resolution tag, e.g. "240813_121003"
+	Filename         string       // e.g. "240813_121003-4k.mp4"
+	OriginalFilename string       // name before any rename happened
+	BaseName         string       // name without extension and resolution tag, e.g. "240813_121003"
 	CurrentTag   string       // resolution tag currently in filename ("4k", "1080", or "")
 	ActualRes    Resolution   // detected resolution from ffprobe
 	IsPortrait   bool         // height > width

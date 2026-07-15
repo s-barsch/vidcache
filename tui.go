@@ -649,11 +649,7 @@ func (m model) viewRename() string {
 	// Show already processed renames.
 	for i := 0; i < m.renameIdx && i < len(m.renameQueue); i++ {
 		v := m.renameQueue[i]
-		origName := v.BaseName
-		if v.CurrentTag != "" {
-			origName += "-" + v.CurrentTag
-		}
-		origName += ".mp4"
+		origName := v.OriginalFilename
 
 		if v.Status == StatusSkipped {
 			b.WriteString(dimStyle.Render(fmt.Sprintf("  ⊘ %s (skipped)", origName)))

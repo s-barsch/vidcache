@@ -112,16 +112,17 @@ func analyzeVideo(path string) (*VideoFile, error) {
 	actualRes := ResolutionForHeight(effectiveHeight)
 
 	video := &VideoFile{
-		Path:       path,
-		Dir:        dir,
-		Filename:   filename,
-		BaseName:   baseName,
-		CurrentTag: currentTag,
-		ActualRes:  actualRes,
-		IsPortrait: isPortrait,
-		Width:      probe.Width,
-		Height:     probe.Height,
-		Duration:   probe.Duration,
+		Path:             path,
+		Dir:              dir,
+		Filename:         filename,
+		OriginalFilename: filename,
+		BaseName:         baseName,
+		CurrentTag:       currentTag,
+		ActualRes:        actualRes,
+		IsPortrait:       isPortrait,
+		Width:            probe.Width,
+		Height:           probe.Height,
+		Duration:         probe.Duration,
 	}
 
 	// Check if filename has the correct resolution tag.
