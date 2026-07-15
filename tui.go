@@ -82,6 +82,11 @@ type model struct {
 	scanStatus string
 	scanResult *ScanResult
 
+	// Summary phase
+	cursor       int
+	selected     map[int]struct{}
+	scrollOffset int
+
 	// Rename phase
 	renameQueue   []*VideoFile
 	renameIdx     int
@@ -180,6 +185,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case scanDoneMsg:
 		m.scanResult = msg.result
 		m.phase = phaseSummary
+		m.selected = make(map[int]struct{})
+		for i, v := range m.scanResult.Videos {
+			if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
+				m.selected[i] = struct{}{}
+			}
+		}
 		return m, nil
 
 	case scanErrorMsg:
@@ -224,7 +235,69 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) updateSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+			if m.cursor < m.scrollOffset {
+				m.scrollOffset = m.cursor
+			}
+		}
+	case "down", "j":
+		if m.scanResult != nil && m.cursor < len(m.scanResult.Videos)-1 {
+			m.cursor++
+			maxVisible := m.height - 15
+			if maxVisible < 5 {
+				maxVisible = 5
+			}
+			if m.cursor >= m.scrollOffset+maxVisible {
+				m.scrollOffset = m.cursor - maxVisible + 1
+			}
+		}
+	case " ", "space":
+		if m.scanResult != nil && len(m.scanResult.Videos) > 0 {
+			v := m.scanResult.Videos[m.cursor]
+			if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
+				if _, ok := m.selected[m.cursor]; ok {
+					delete(m.selected, m.cursor)
+				} else {
+					m.selected[m.cursor] = struct{}{}
+				}
+			}
+		}
+	case "a":
+		if m.scanResult != nil {
+			allSelected := true
+			for i, v := range m.scanResult.Videos {
+				if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
+					if _, ok := m.selected[i]; !ok {
+						allSelected = false
+						break
+					}
+				}
+			}
+			for i, v := range m.scanResult.Videos {
+				if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
+					if allSelected {
+						delete(m.selected, i)
+					} else {
+						m.selected[i] = struct{}{}
+					}
+				}
+			}
+		}
 	case "enter":
+		if m.scanResult == nil {
+			return m, nil
+		}
+		// Skip unselected actionable items
+		for i, v := range m.scanResult.Videos {
+			if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
+				if _, ok := m.selected[i]; !ok {
+					v.Status = StatusSkipped
+				}
+			}
+		}
+
 		// Build rename queue.
 		m.renameQueue = nil
 		for _, v := range m.scanResult.Videos {
@@ -456,16 +529,47 @@ func (m model) viewSummary() string {
 
 	b.WriteString("\n")
 
+	maxVisible := m.height - 15
+	if maxVisible < 5 {
+		maxVisible = 5
+	}
+	endIdx := m.scrollOffset + maxVisible
+	if endIdx > len(r.Videos) {
+		endIdx = len(r.Videos)
+	}
+
 	// List each video with status.
-	for _, v := range r.Videos {
+	for i := m.scrollOffset; i < endIdx; i++ {
+		v := r.Videos[i]
 		icon, style := statusIcon(v.Status)
+		
+		if i == m.cursor {
+			style = activeStyle
+		}
+
 		orient := "L"
 		if v.IsPortrait {
 			orient = "P"
 		}
 		dims := fmt.Sprintf("%dx%d", v.Width, v.Height)
 
-		line := fmt.Sprintf("  %s %-40s %4s  %s  %s",
+		cursorStr := "  "
+		if i == m.cursor {
+			cursorStr = "> "
+		}
+
+		selStr := "   "
+		if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
+			if _, ok := m.selected[i]; ok {
+				selStr = "[x]"
+			} else {
+				selStr = "[ ]"
+			}
+		}
+
+		line := fmt.Sprintf("%s%s %s %-40s %4s  %s  %s",
+			cursorStr,
+			selStr,
 			icon,
 			truncate(v.Filename, 40),
 			v.ActualRes.Tag,
@@ -477,8 +581,8 @@ func (m model) viewSummary() string {
 		// Show existing sizes.
 		if len(v.ExistSizes) > 0 {
 			tags := make([]string, len(v.ExistSizes))
-			for i, s := range v.ExistSizes {
-				tags[i] = s.Tag
+			for j, s := range v.ExistSizes {
+				tags[j] = s.Tag
 			}
 			b.WriteString(dimStyle.Render(fmt.Sprintf("  [%s]", strings.Join(tags, ","))))
 		}
@@ -486,13 +590,18 @@ func (m model) viewSummary() string {
 		// Show missing sizes.
 		if len(v.MissingSizes) > 0 {
 			tags := make([]string, len(v.MissingSizes))
-			for i, s := range v.MissingSizes {
-				tags[i] = s.Tag
+			for j, s := range v.MissingSizes {
+				tags[j] = s.Tag
 			}
 			b.WriteString(warnStyle.Render(fmt.Sprintf("  missing: %s", strings.Join(tags, ","))))
 		}
 
 		b.WriteString("\n")
+	}
+
+	if len(r.Videos) > maxVisible {
+		scrollInfo := fmt.Sprintf("  ... viewing %d-%d of %d ...", m.scrollOffset+1, endIdx, len(r.Videos))
+		b.WriteString("\n" + dimStyle.Render(scrollInfo) + "\n")
 	}
 
 	return b.String()
@@ -648,7 +757,7 @@ func (m model) viewDone() string {
 func (m model) helpText() string {
 	switch m.phase {
 	case phaseSummary:
-		return "[enter] proceed  [q] quit"
+		return "[↑/↓] move  [space] select  [a] toggle all  [enter] proceed  [q] quit"
 	case phaseRename:
 		return "[y] rename  [n] skip  [q] quit"
 	case phaseConfirmCache:
