@@ -649,10 +649,21 @@ func (m model) viewRename() string {
 	// Show already processed renames.
 	for i := 0; i < m.renameIdx && i < len(m.renameQueue); i++ {
 		v := m.renameQueue[i]
+		origName := v.BaseName
+		if v.CurrentTag != "" {
+			origName += "-" + v.CurrentTag
+		}
+		origName += ".mp4"
+
 		if v.Status == StatusSkipped {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  ⊘ %s (skipped)\n", v.Filename)))
+			b.WriteString(dimStyle.Render(fmt.Sprintf("  ⊘ %s (skipped)", origName)))
+			b.WriteString("\n")
+		} else if v.NeedsRename {
+			b.WriteString(dimStyle.Render(fmt.Sprintf("  → %s (kept)", origName)))
+			b.WriteString("\n")
 		} else {
-			b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s\n", v.BaseName+"-"+v.CurrentTag+".mp4", v.Filename)))
+			b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s", origName, v.Filename)))
+			b.WriteString("\n")
 		}
 	}
 
@@ -680,13 +691,15 @@ func (m model) viewConfirmCache() string {
 	for i := 0; i < m.confirmIdx && i < len(m.cacheQueue); i++ {
 		v := m.cacheQueue[i]
 		if v.Status == StatusSkipped {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  ⊘ %s (skipped)\n", v.Filename)))
+			b.WriteString(dimStyle.Render(fmt.Sprintf("  ⊘ %s (skipped)", v.Filename)))
+			b.WriteString("\n")
 		} else {
 			tags := make([]string, len(v.MissingSizes))
 			for j, s := range v.MissingSizes {
 				tags[j] = s.Tag
 			}
-			b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s\n", v.Filename, strings.Join(tags, ", "))))
+			b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s", v.Filename, strings.Join(tags, ", "))))
+			b.WriteString("\n")
 		}
 	}
 
