@@ -1,0 +1,3 @@
+# vidcache configuration
+cache_path = "data/cache"
+confirm_before_cache = true
