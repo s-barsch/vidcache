@@ -90,22 +90,28 @@ func (s VideoStatus) String() string {
 
 // VideoFile holds all information about a discovered video.
 type VideoFile struct {
-	Path         string       // absolute path to the mp4 file
-	Dir          string       // directory containing the file
+	Path             string       // absolute path to the mp4 file
+	Dir              string       // directory containing the file
 	Filename         string       // e.g. "240813_121003-4k.mp4"
 	OriginalFilename string       // name before any rename happened
 	BaseName         string       // name without extension and resolution tag, e.g. "240813_121003"
-	CurrentTag   string       // resolution tag currently in filename ("4k", "1080", or "")
-	ActualRes    Resolution   // detected resolution from ffprobe
-	IsPortrait   bool         // height > width
-	Width        int          // pixel width
-	Height       int          // pixel height
-	Duration     float64      // duration in seconds
-	NeedsRename  bool         // filename doesn't have the correct resolution tag
-	MissingSizes []Resolution // sizes that still need to be generated
-	ExistSizes   []Resolution // sizes that already exist
-	Status       VideoStatus
-	Error        string // error message if Status == StatusError
+	CurrentTag       string       // resolution tag currently in filename ("4k", "1080", or "")
+	ActualRes        Resolution   // detected resolution from ffprobe
+	IsPortrait       bool         // height > width
+	Width            int          // pixel width
+	Height           int          // pixel height
+	Duration         float64      // duration in seconds
+	ExistSizes       []Resolution // which resized mp4s exist in "sizes/"
+	MissingSizes     []Resolution // which resized mp4s are missing
+	NeedsRename      bool         // true if filename needs to be corrected
+	Status           VideoStatus  // current status in the pipeline
+	Error            string       // error message if Status == StatusError
+
+	// Assets
+	HasCaptionEN bool // true if captions/{basename}.en.vtt exists
+	HasCaptionDE bool // true if captions/{basename}.de.vtt exists
+	HasScriptEN  bool // true if script/{basename}.en.txt exists
+	HasScriptDE  bool // true if script/{basename}.de.txt exists
 }
 
 // SizesDir returns the path to the sizes subdirectory.

@@ -667,6 +667,24 @@ func (m model) viewSummary() string {
 			b.WriteString(dimStyle.Render("(missing)"))
 		}
 
+		var extras []string
+		if v.HasCaptionEN {
+			extras = append(extras, "en:vtt")
+		}
+		if v.HasCaptionDE {
+			extras = append(extras, "de:vtt")
+		}
+		if v.HasScriptEN {
+			extras = append(extras, "en:txt")
+		}
+		if v.HasScriptDE {
+			extras = append(extras, "de:txt")
+		}
+
+		if len(extras) > 0 {
+			b.WriteString(dimStyle.Render(fmt.Sprintf("  [%s]", strings.Join(extras, " "))))
+		}
+
 		b.WriteString("\n")
 	}
 

@@ -125,6 +125,25 @@ func analyzeVideo(path string) (*VideoFile, error) {
 		Duration:         probe.Duration,
 	}
 
+	// Check for captions
+	captionsDir := filepath.Join(dir, "captions")
+	if stat, err := os.Stat(filepath.Join(captionsDir, baseName+".en.vtt")); err == nil && !stat.IsDir() {
+		video.HasCaptionEN = true
+	}
+	if stat, err := os.Stat(filepath.Join(captionsDir, baseName+".de.vtt")); err == nil && !stat.IsDir() {
+		video.HasCaptionDE = true
+	}
+
+	// Check for scripts
+	scriptDir := filepath.Join(dir, "script")
+	if stat, err := os.Stat(filepath.Join(scriptDir, baseName+".en.txt")); err == nil && !stat.IsDir() {
+		video.HasScriptEN = true
+	}
+	if stat, err := os.Stat(filepath.Join(scriptDir, baseName+".de.txt")); err == nil && !stat.IsDir() {
+		video.HasScriptDE = true
+	}
+
+
 	// Check if filename has the correct resolution tag.
 	if currentTag != actualRes.Tag {
 		video.NeedsRename = true
