@@ -65,15 +65,13 @@ var (
 	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
 
 	existTagStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#111111")).
-		Background(lipgloss.Color("#04B575")).
-		Padding(0, 1).
+		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color("#FFFFFF")).
 		MarginRight(1)
 
 	missingTagStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#111111")).
-		Background(lipgloss.Color("#FFB347")).
-		Padding(0, 1).
+		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color("#CCCCCC")).
 		MarginRight(1)
 	boldStyle    = lipgloss.NewStyle().Bold(true)
 	activeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
