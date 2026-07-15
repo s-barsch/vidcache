@@ -83,6 +83,34 @@ func ScanVideos(cachePath string, progressFn func(msg string)) (*ScanResult, err
 		}
 	}
 
+	// Clean up orphaned dims files.
+	if progressFn != nil {
+		progressFn("Cleaning up orphaned metadata...")
+	}
+
+	validDimsFiles := make(map[string]bool)
+	sizesDirs := make(map[string]bool)
+	for _, v := range result.Videos {
+		sDir := filepath.Join(v.Dir, "sizes")
+		sizesDirs[sDir] = true
+		validDimsFiles[filepath.Join(sDir, v.BaseName+".dims.txt")] = true
+	}
+
+	for sDir := range sizesDirs {
+		entries, err := os.ReadDir(sDir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".dims.txt") {
+				fullPath := filepath.Join(sDir, e.Name())
+				if !validDimsFiles[fullPath] {
+					os.Remove(fullPath)
+				}
+			}
+		}
+	}
+
 	return result, nil
 }
 
