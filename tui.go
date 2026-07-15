@@ -70,8 +70,8 @@ var (
 		MarginRight(1)
 
 	missingTagStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#000000")).
-		Background(lipgloss.Color("#CCCCCC")).
+		Foreground(lipgloss.Color("#888888")).
+		Background(lipgloss.Color("#333333")).
 		MarginRight(1)
 	boldStyle    = lipgloss.NewStyle().Bold(true)
 	activeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
@@ -599,10 +599,10 @@ func (m model) viewSummary() string {
 		// Show missing sizes.
 		if len(v.MissingSizes) > 0 {
 			b.WriteString("  ")
-			b.WriteString(warnStyle.Render("missing: "))
 			for _, s := range v.MissingSizes {
 				b.WriteString(missingTagStyle.Render(s.Tag))
 			}
+			b.WriteString(dimStyle.Render("(missing)"))
 		}
 
 		b.WriteString("\n")
