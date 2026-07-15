@@ -332,6 +332,13 @@ func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			err := RenameVideo(video)
 			return renameResultMsg{video: video, err: err}
 		}
+	case "s":
+		if len(video.MissingSizes) > 0 {
+			video.Status = StatusNeedsCache
+		} else {
+			video.Status = StatusOK
+		}
+		return m.advanceRename()
 	case "n":
 		video.Status = StatusSkipped
 		return m.advanceRename()
@@ -785,7 +792,7 @@ func (m model) helpText() string {
 	case phaseSummary:
 		return "[↑/↓] move  [space] select  [a] toggle all  [enter] proceed  [q] quit"
 	case phaseRename:
-		return "[y] rename  [n] skip  [b/esc] back  [q] quit"
+		return "[y] rename  [s] skip rename  [n] skip entirely  [b/esc] back  [q] quit"
 	case phaseConfirmCache:
 		return "[y] confirm  [n] skip  [a] approve all  [b/esc] back  [q] quit"
 	case phaseEncoding:
