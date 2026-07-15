@@ -176,6 +176,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "enter" || msg.String() == "q" {
 				return m, tea.Quit
 			}
+			if msg.String() == "b" || msg.String() == "esc" {
+				m.phase = phaseScanning
+				m.scanStatus = "Rescanning..."
+				return m, m.startScan()
+			}
 		}
 
 	case spinner.TickMsg:
@@ -261,6 +266,39 @@ func (m model) updateSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.cursor >= m.scrollOffset+maxVisible {
 				m.scrollOffset = m.cursor - maxVisible + 1
+			}
+		}
+	case "left", "h":
+		if m.scanResult != nil {
+			maxVisible := m.height - 15
+			if maxVisible < 5 {
+				maxVisible = 5
+			}
+			m.cursor -= maxVisible
+			if m.cursor < 0 {
+				m.cursor = 0
+			}
+			m.scrollOffset -= maxVisible
+			if m.scrollOffset < 0 {
+				m.scrollOffset = 0
+			}
+		}
+	case "right", "l":
+		if m.scanResult != nil {
+			maxVisible := m.height - 15
+			if maxVisible < 5 {
+				maxVisible = 5
+			}
+			m.cursor += maxVisible
+			if m.cursor >= len(m.scanResult.Videos) {
+				m.cursor = len(m.scanResult.Videos) - 1
+			}
+			m.scrollOffset += maxVisible
+			if m.scrollOffset > len(m.scanResult.Videos)-maxVisible {
+				m.scrollOffset = len(m.scanResult.Videos) - maxVisible
+			}
+			if m.scrollOffset < 0 {
+				m.scrollOffset = 0
 			}
 		}
 	case " ", "space":
@@ -799,7 +837,7 @@ func (m model) viewDone() string {
 func (m model) helpText() string {
 	switch m.phase {
 	case phaseSummary:
-		return "[↑/↓] move  [space] select  [a] toggle all  [enter] proceed  [q] quit"
+		return "[↑/↓] move  [←/→] page  [space] select  [a] toggle all  [enter] proceed  [q] quit"
 	case phaseRename:
 		return "[y] rename  [s] skip rename  [n] skip entirely  [b/esc] back  [q] quit"
 	case phaseConfirmCache:
@@ -807,7 +845,7 @@ func (m model) helpText() string {
 	case phaseEncoding:
 		return "[q] cancel & quit"
 	case phaseDone:
-		return "[enter/q] exit"
+		return "[b/esc] back to start  [enter/q] quit"
 	default:
 		return "[q] quit"
 	}
