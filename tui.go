@@ -299,20 +299,13 @@ func (m model) updateSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.scanResult == nil {
 			return m, nil
 		}
-		// Skip unselected actionable items
-		for i, v := range m.scanResult.Videos {
-			if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
-				if _, ok := m.selected[i]; !ok {
-					v.Status = StatusSkipped
-				}
-			}
-		}
-
 		// Build rename queue.
 		m.renameQueue = nil
-		for _, v := range m.scanResult.Videos {
+		for i, v := range m.scanResult.Videos {
 			if v.Status == StatusNeedsRename {
-				m.renameQueue = append(m.renameQueue, v)
+				if _, ok := m.selected[i]; ok {
+					m.renameQueue = append(m.renameQueue, v)
+				}
 			}
 		}
 		if len(m.renameQueue) > 0 {
@@ -332,6 +325,8 @@ func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	video := m.renameQueue[m.renameIdx]
 	switch msg.String() {
+	case "b", "esc":
+		return m.resetToSummary()
 	case "y":
 		return m, func() tea.Msg {
 			err := RenameVideo(video)
@@ -355,9 +350,11 @@ func (m model) advanceRename() (tea.Model, tea.Cmd) {
 func (m model) startCachePhase() (tea.Model, tea.Cmd) {
 	// Build cache queue from all videos that need encoding.
 	m.cacheQueue = nil
-	for _, v := range m.scanResult.Videos {
+	for i, v := range m.scanResult.Videos {
 		if len(v.MissingSizes) > 0 && v.Status != StatusSkipped && v.Status != StatusError {
-			m.cacheQueue = append(m.cacheQueue, v)
+			if _, ok := m.selected[i]; ok {
+				m.cacheQueue = append(m.cacheQueue, v)
+			}
 		}
 	}
 
@@ -382,6 +379,8 @@ func (m model) updateConfirmCache(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
+	case "b", "esc":
+		return m.resetToSummary()
 	case "y":
 		m.cacheQueue[m.confirmIdx].Status = StatusQueued
 		m.confirmIdx++
@@ -400,6 +399,24 @@ func (m model) updateConfirmCache(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.cacheQueue[i].Status = StatusQueued
 		}
 		return m.startEncoding()
+	}
+	return m, nil
+}
+
+func (m model) resetToSummary() (tea.Model, tea.Cmd) {
+	m.phase = phaseSummary
+	if m.scanResult != nil {
+		for _, v := range m.scanResult.Videos {
+			if v.Status == StatusSkipped {
+				if v.NeedsRename {
+					v.Status = StatusNeedsRename
+				} else if len(v.MissingSizes) > 0 {
+					v.Status = StatusNeedsCache
+				} else {
+					v.Status = StatusOK
+				}
+			}
+		}
 	}
 	return m, nil
 }
@@ -768,9 +785,9 @@ func (m model) helpText() string {
 	case phaseSummary:
 		return "[↑/↓] move  [space] select  [a] toggle all  [enter] proceed  [q] quit"
 	case phaseRename:
-		return "[y] rename  [n] skip  [q] quit"
+		return "[y] rename  [n] skip  [b/esc] back  [q] quit"
 	case phaseConfirmCache:
-		return "[y] confirm  [n] skip  [a] approve all  [q] quit"
+		return "[y] confirm  [n] skip  [a] approve all  [b/esc] back  [q] quit"
 	case phaseEncoding:
 		return "[q] cancel & quit"
 	case phaseDone:
