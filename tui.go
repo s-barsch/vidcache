@@ -679,16 +679,16 @@ func (m model) viewSummary() string {
 		if v.HasCaptionEN || v.HasCaptionDE || v.HasScriptEN || v.HasScriptDE {
 			b.WriteString("  ")
 			if v.HasCaptionEN {
-				b.WriteString(ccTagStyle.Render("cc_en"))
+				b.WriteString(ccTagStyle.Render("💬 en"))
 			}
 			if v.HasCaptionDE {
-				b.WriteString(ccTagStyle.Render("cc_de"))
+				b.WriteString(ccTagStyle.Render("💬 de"))
 			}
 			if v.HasScriptEN {
-				b.WriteString(txTagStyle.Render("tx_en"))
+				b.WriteString(txTagStyle.Render("📝 en"))
 			}
 			if v.HasScriptDE {
-				b.WriteString(txTagStyle.Render("tx_de"))
+				b.WriteString(txTagStyle.Render("📝 de"))
 			}
 		}
 
