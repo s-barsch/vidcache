@@ -63,6 +63,18 @@ var (
 	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B"))
 	queueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#87CEEB"))
 	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+
+	existTagStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#111111")).
+		Background(lipgloss.Color("#04B575")).
+		Padding(0, 1).
+		MarginRight(1)
+
+	missingTagStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#111111")).
+		Background(lipgloss.Color("#FFB347")).
+		Padding(0, 1).
+		MarginRight(1)
 	boldStyle    = lipgloss.NewStyle().Bold(true)
 	activeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
 	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Underline(true)
@@ -580,20 +592,19 @@ func (m model) viewSummary() string {
 
 		// Show existing sizes.
 		if len(v.ExistSizes) > 0 {
-			tags := make([]string, len(v.ExistSizes))
-			for j, s := range v.ExistSizes {
-				tags[j] = s.Tag
+			b.WriteString("  ")
+			for _, s := range v.ExistSizes {
+				b.WriteString(existTagStyle.Render(s.Tag))
 			}
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  [%s]", strings.Join(tags, ","))))
 		}
 
 		// Show missing sizes.
 		if len(v.MissingSizes) > 0 {
-			tags := make([]string, len(v.MissingSizes))
-			for j, s := range v.MissingSizes {
-				tags[j] = s.Tag
+			b.WriteString("  ")
+			b.WriteString(warnStyle.Render("missing: "))
+			for _, s := range v.MissingSizes {
+				b.WriteString(missingTagStyle.Render(s.Tag))
 			}
-			b.WriteString(warnStyle.Render(fmt.Sprintf("  missing: %s", strings.Join(tags, ","))))
 		}
 
 		b.WriteString("\n")
