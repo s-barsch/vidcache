@@ -73,6 +73,16 @@ var (
 		Foreground(lipgloss.Color("#888888")).
 		Background(lipgloss.Color("#333333")).
 		MarginRight(1)
+
+	ccTagStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color("#FF6B6B")).
+		MarginRight(1)
+
+	txTagStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#000000")).
+		Background(lipgloss.Color("#87CEEB")).
+		MarginRight(1)
 	boldStyle    = lipgloss.NewStyle().Bold(true)
 	activeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
 	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Underline(true)
@@ -667,22 +677,20 @@ func (m model) viewSummary() string {
 			b.WriteString(dimStyle.Render("(missing)"))
 		}
 
-		var extras []string
-		if v.HasCaptionEN {
-			extras = append(extras, "en:vtt")
-		}
-		if v.HasCaptionDE {
-			extras = append(extras, "de:vtt")
-		}
-		if v.HasScriptEN {
-			extras = append(extras, "en:txt")
-		}
-		if v.HasScriptDE {
-			extras = append(extras, "de:txt")
-		}
-
-		if len(extras) > 0 {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  [%s]", strings.Join(extras, " "))))
+		if v.HasCaptionEN || v.HasCaptionDE || v.HasScriptEN || v.HasScriptDE {
+			b.WriteString("  ")
+			if v.HasCaptionEN {
+				b.WriteString(ccTagStyle.Render("cc_en"))
+			}
+			if v.HasCaptionDE {
+				b.WriteString(ccTagStyle.Render("cc_de"))
+			}
+			if v.HasScriptEN {
+				b.WriteString(txTagStyle.Render("tx_en"))
+			}
+			if v.HasScriptDE {
+				b.WriteString(txTagStyle.Render("tx_de"))
+			}
 		}
 
 		b.WriteString("\n")
