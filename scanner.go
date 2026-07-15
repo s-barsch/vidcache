@@ -154,6 +154,17 @@ func analyzeVideo(path string) (*VideoFile, error) {
 	smallerSizes := SmallerResolutions(actualRes)
 	sizesDir := filepath.Join(dir, "sizes")
 
+	// Ensure dimensions file exists or update it if older than mp4.
+	dimsPath := filepath.Join(sizesDir, baseName+".dims.txt")
+	if mp4Stat, err := os.Stat(path); err == nil {
+		dimsStat, err := os.Stat(dimsPath)
+		if err != nil || dimsStat.ModTime().Before(mp4Stat.ModTime()) {
+			os.MkdirAll(sizesDir, 0755)
+			dimsContent := fmt.Sprintf("%dx%d", probe.Width, probe.Height)
+			os.WriteFile(dimsPath, []byte(dimsContent), 0644)
+		}
+	}
+
 	for _, res := range smallerSizes {
 		sizedPath := filepath.Join(sizesDir, baseName+"-"+res.Tag+".mp4")
 		if _, err := os.Stat(sizedPath); err == nil {
