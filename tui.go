@@ -58,44 +58,43 @@ var (
 			Background(lipgloss.Color("#7D56F4")).
 			Padding(0, 1)
 
-	okStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
-	warnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB347"))
-	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B"))
-	queueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#87CEEB"))
-	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
+	warnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB347"))
+	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B"))
+	queueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#87CEEB"))
+	dimStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
 
 	existTagStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#000000")).
-		Background(lipgloss.Color("#FFFFFF")).
-		MarginRight(1)
+			Foreground(lipgloss.Color("#000000")).
+			Background(lipgloss.Color("#FFFFFF")).
+			MarginRight(1)
 
 	missingTagStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#888888")).
-		Background(lipgloss.Color("#333333")).
-		MarginRight(1)
+			Foreground(lipgloss.Color("#888888")).
+			Background(lipgloss.Color("#333333")).
+			MarginRight(1)
 
 	ccTagStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#000000")).
-		Background(lipgloss.Color("#FF6B6B")).
-		MarginRight(1)
+			Foreground(lipgloss.Color("#000000")).
+			Background(lipgloss.Color("#FF6B6B")).
+			MarginRight(1)
 
 	txTagStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#000000")).
-		Background(lipgloss.Color("#87CEEB")).
-		MarginRight(1)
-	boldStyle    = lipgloss.NewStyle().Bold(true)
-	activeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
-	headerStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Underline(true)
-	helpStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262"))
+			Foreground(lipgloss.Color("#000000")).
+			Background(lipgloss.Color("#87CEEB")).
+			MarginRight(1)
+	activeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
+	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Underline(true)
+	helpStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262"))
 )
 
 // ── Model ───────────────────────────────────────────
 
 type model struct {
-	cfg     Config
-	phase   phase
-	width   int
-	height  int
+	cfg    Config
+	phase  phase
+	width  int
+	height int
 
 	// Scanning phase
 	spinner    spinner.Model
@@ -108,19 +107,19 @@ type model struct {
 	scrollOffset int
 
 	// Rename phase
-	renameQueue   []*VideoFile
-	renameIdx     int
+	renameQueue []*VideoFile
+	renameIdx   int
 
 	// Confirm cache phase
-	cacheQueue    []*VideoFile
-	confirmIdx    int
+	cacheQueue []*VideoFile
+	confirmIdx int
 
 	// Encoding phase
-	encodeQueue   []encodeJob
-	encodeIdx     int
+	encodeQueue    []encodeJob
+	encodeIdx      int
 	encodeProgress EncodeProgress
-	progressBar   progress.Model
-	cancelEncode  context.CancelFunc
+	progressBar    progress.Model
+	cancelEncode   context.CancelFunc
 
 	// Error tracking
 	errors []string
@@ -232,7 +231,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.advanceRename()
 
 	case encodeStartMsg:
-		return m, m.processNextEncode()
+		return m.processNextEncode()
 
 	case encodeProgressMsg:
 		m.encodeProgress = msg.progress
@@ -248,7 +247,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = phaseDone
 			return m, nil
 		}
-		return m, m.processNextEncode()
+		return m.processNextEncode()
 
 	case encodeAllDoneMsg:
 		m.phase = phaseDone
@@ -497,9 +496,9 @@ func (m model) startEncoding() (tea.Model, tea.Cmd) {
 	return m, func() tea.Msg { return encodeStartMsg{} }
 }
 
-func (m model) processNextEncode() tea.Cmd {
+func (m model) processNextEncode() (model, tea.Cmd) {
 	if m.encodeIdx >= len(m.encodeQueue) {
-		return func() tea.Msg { return encodeAllDoneMsg{} }
+		return m, func() tea.Msg { return encodeAllDoneMsg{} }
 	}
 
 	job := m.encodeQueue[m.encodeIdx]
@@ -508,7 +507,7 @@ func (m model) processNextEncode() tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelEncode = cancel
 
-	return func() tea.Msg {
+	return m, func() tea.Msg {
 		progressCh := make(chan EncodeProgress, 10)
 		errCh := make(chan error, 1)
 
@@ -624,7 +623,7 @@ func (m model) viewSummary() string {
 	for i := m.scrollOffset; i < endIdx; i++ {
 		v := r.Videos[i]
 		icon, style := statusIcon(v.Status)
-		
+
 		if i == m.cursor {
 			style = activeStyle
 		}
@@ -701,7 +700,9 @@ func (m model) viewSummary() string {
 
 	if len(r.Videos) > maxVisible {
 		scrollInfo := fmt.Sprintf("  ... viewing %d-%d of %d ...", m.scrollOffset+1, endIdx, len(r.Videos))
-		b.WriteString("\n" + dimStyle.Render(scrollInfo) + "\n")
+		b.WriteString("\n")
+		b.WriteString(dimStyle.Render(scrollInfo))
+		b.WriteString("\n")
 	}
 
 	return b.String()

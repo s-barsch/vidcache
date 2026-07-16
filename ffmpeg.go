@@ -155,6 +155,10 @@ func Transcode(ctx context.Context, src, dst string, targetHeight int, isPortrai
 		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading ffmpeg output: %w", err)
+	}
+
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("ffmpeg encoding failed: %w", err)
 	}
