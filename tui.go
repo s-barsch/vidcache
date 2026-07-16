@@ -601,6 +601,46 @@ func (m model) viewSummary() string {
 		endIdx = len(r.Videos)
 	}
 
+	// Figure out max widths for alignment of columns on this page.
+	maxSizesW := 0
+	maxCapsW := 0
+	for i := m.scrollOffset; i < endIdx; i++ {
+		v := r.Videos[i]
+		var sizesB strings.Builder
+		if len(v.ExistSizes) > 0 {
+			sizesB.WriteString("  ")
+			for _, s := range v.ExistSizes {
+				sizesB.WriteString(existTagStyle.Render(s.Tag))
+			}
+		}
+		if len(v.MissingSizes) > 0 {
+			sizesB.WriteString("  ")
+			for _, s := range v.MissingSizes {
+				sizesB.WriteString(missingTagStyle.Render(s.Tag))
+			}
+			sizesB.WriteString(dimStyle.Render("(missing)"))
+		}
+		sw := lipgloss.Width(sizesB.String())
+		if sw > maxSizesW {
+			maxSizesW = sw
+		}
+
+		var capsB strings.Builder
+		if v.HasCaptionEN || v.HasCaptionDE {
+			capsB.WriteString("  💬 ")
+			if v.HasCaptionEN {
+				capsB.WriteString(ccTagStyle.Render("en"))
+			}
+			if v.HasCaptionDE {
+				capsB.WriteString(ccTagStyle.Render("de"))
+			}
+		}
+		cw := lipgloss.Width(capsB.String())
+		if cw > maxCapsW {
+			maxCapsW = cw
+		}
+	}
+
 	// List each video with status.
 	for i := m.scrollOffset; i < endIdx; i++ {
 		v := r.Videos[i]
@@ -630,7 +670,7 @@ func (m model) viewSummary() string {
 			}
 		}
 
-		line := fmt.Sprintf("%s%s %s %-30s  %s  %s",
+		line := fmt.Sprintf("%s%s %s %-30s  %s  %-9s",
 			cursorStr,
 			selStr,
 			icon,
@@ -640,31 +680,49 @@ func (m model) viewSummary() string {
 		)
 		b.WriteString(style.Render(line))
 
+		var sizesB strings.Builder
 		// Show existing sizes.
 		if len(v.ExistSizes) > 0 {
-			b.WriteString("  ")
+			sizesB.WriteString("  ")
 			for _, s := range v.ExistSizes {
-				b.WriteString(existTagStyle.Render(s.Tag))
+				sizesB.WriteString(existTagStyle.Render(s.Tag))
 			}
 		}
 
 		// Show missing sizes.
 		if len(v.MissingSizes) > 0 {
-			b.WriteString("  ")
+			sizesB.WriteString("  ")
 			for _, s := range v.MissingSizes {
-				b.WriteString(missingTagStyle.Render(s.Tag))
+				sizesB.WriteString(missingTagStyle.Render(s.Tag))
 			}
-			b.WriteString(dimStyle.Render("(missing)"))
+			sizesB.WriteString(dimStyle.Render("(missing)"))
+		}
+		
+		sizesStr := sizesB.String()
+		b.WriteString(sizesStr)
+		
+		sizesW := lipgloss.Width(sizesStr)
+		if sizesW < maxSizesW {
+			b.WriteString(strings.Repeat(" ", maxSizesW-sizesW))
 		}
 
+		var capsB strings.Builder
 		if v.HasCaptionEN || v.HasCaptionDE {
-			b.WriteString("  💬 ")
+			capsB.WriteString("  💬 ")
 			if v.HasCaptionEN {
-				b.WriteString(ccTagStyle.Render("en"))
+				capsB.WriteString(ccTagStyle.Render("en"))
 			}
 			if v.HasCaptionDE {
-				b.WriteString(ccTagStyle.Render("de"))
+				capsB.WriteString(ccTagStyle.Render("de"))
 			}
+		}
+		
+		capsStr := capsB.String()
+		b.WriteString(capsStr)
+		
+		capsW := lipgloss.Width(capsStr)
+		if capsW < maxCapsW {
+			b.WriteString(strings.Repeat(" ", maxCapsW-capsW))
 		}
 
 		if v.HasScriptEN || v.HasScriptDE {
@@ -915,4 +973,21 @@ func shortenPath(path string) string {
 		return path
 	}
 	return rel
+}
+func newModel(cfg Config) model {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4"))
+
+	p := progress.New(
+		progress.WithDefaultGradient(),
+		progress.WithWidth(50),
+	)
+
+	return model{
+		cfg:         cfg,
+		phase:       phaseScanning,
+		spinner:     s,
+		progressBar: p,
+	}
 }
