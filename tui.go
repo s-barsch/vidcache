@@ -190,11 +190,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scanResult = msg.result
 		m.phase = phaseSummary
 		m.selected = make(map[int]struct{})
-		for i, v := range m.scanResult.Videos {
-			if v.Status == StatusNeedsRename || v.Status == StatusNeedsCache {
-				m.selected[i] = struct{}{}
-			}
-		}
 		return m, nil
 
 	case scanErrorMsg:
@@ -875,8 +870,9 @@ func (m model) viewEncoding() string {
 	// Show completed encodes.
 	for i := 0; i < m.encodeIdx && i < len(m.encodeQueue); i++ {
 		job := m.encodeQueue[i]
-		b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s\n",
+		b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s",
 			job.video.Filename, job.res.Tag)))
+		b.WriteString("\n")
 	}
 
 	// Current encode.
@@ -900,13 +896,15 @@ func (m model) viewEncoding() string {
 	if remaining > 0 {
 		b.WriteString(fmt.Sprintf("\n  %s\n",
 			dimStyle.Render(fmt.Sprintf("── Queue (%d remaining) ──", remaining))))
-		for i := m.encodeIdx + 1; i < len(m.encodeQueue) && i < m.encodeIdx+6; i++ {
+		for i := m.encodeIdx + 1; i < len(m.encodeQueue) && i < m.encodeIdx+26; i++ {
 			job := m.encodeQueue[i]
-			b.WriteString(queueStyle.Render(fmt.Sprintf("  ◻ %s → %s\n",
+			b.WriteString(queueStyle.Render(fmt.Sprintf("  ◻ %s → %s",
 				job.video.Filename, job.res.Tag)))
+			b.WriteString("\n")
 		}
-		if remaining > 5 {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("  ... and %d more\n", remaining-5)))
+		if remaining > 25 {
+			b.WriteString(dimStyle.Render(fmt.Sprintf("  ... and %d more", remaining-25)))
+			b.WriteString("\n")
 		}
 	}
 
