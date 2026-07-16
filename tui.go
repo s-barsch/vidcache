@@ -587,7 +587,9 @@ func (m model) viewSummary() string {
 		stats = append(stats, queueStyle.Render(fmt.Sprintf("◻ %d need sizes", r.CacheCount)))
 	}
 	if len(stats) > 0 {
-		b.WriteString("  " + strings.Join(stats, "   ") + "\n")
+		b.WriteString("  ")
+		b.WriteString(strings.Join(stats, "   "))
+		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
