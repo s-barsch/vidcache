@@ -130,24 +130,6 @@ type encodeJob struct {
 	res   Resolution
 }
 
-func newModel(cfg Config) model {
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4"))
-
-	p := progress.New(
-		progress.WithDefaultGradient(),
-		progress.WithWidth(50),
-	)
-
-	return model{
-		cfg:         cfg,
-		phase:       phaseScanning,
-		spinner:     s,
-		progressBar: p,
-	}
-}
-
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
