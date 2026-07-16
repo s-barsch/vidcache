@@ -53,7 +53,6 @@ type encodeAllDoneMsg struct{}
 
 var (
 	titleStyle = lipgloss.NewStyle().
-			Bold(true).
 			Foreground(lipgloss.Color("#FAFAFA")).
 			Background(lipgloss.Color("#7D56F4")).
 			Padding(0, 1)
@@ -65,13 +64,12 @@ var (
 	dimStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
 
 	existTagStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#000000")).
-			Background(lipgloss.Color("#FFFFFF")).
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(lipgloss.Color("#3B82F6")).
 			MarginRight(1)
 
 	missingTagStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#888888")).
-			Background(lipgloss.Color("#333333")).
+			Foreground(lipgloss.Color("#666666")).
 			MarginRight(1)
 
 	ccTagStyle = lipgloss.NewStyle().
@@ -84,8 +82,8 @@ var (
 			Background(lipgloss.Color("#87CEEB")).
 			MarginRight(1)
 	activeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FAFAFA")).Underline(true)
-	helpStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#626262"))
+	headerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FAFAFA"))
+	helpStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))
 )
 
 // ── Model ───────────────────────────────────────────
@@ -259,7 +257,7 @@ func (m model) updateSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.scrollOffset = m.cursor - maxVisible + 1
 			}
 		}
-	case "left", "h":
+	case "left", "h", "pgup":
 		if m.scanResult != nil {
 			maxVisible := m.height - 15
 			if maxVisible < 5 {
@@ -274,7 +272,7 @@ func (m model) updateSummary(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.scrollOffset = 0
 			}
 		}
-	case "right", "l":
+	case "right", "l", "pgdown":
 		if m.scanResult != nil {
 			maxVisible := m.height - 15
 			if maxVisible < 5 {
@@ -528,7 +526,7 @@ func (m model) View() string {
 	var b strings.Builder
 
 	b.WriteString(titleStyle.Render(" vidcache "))
-	b.WriteString("\n\n")
+	b.WriteString("  ")
 
 	switch m.phase {
 	case phaseScanning:
@@ -563,31 +561,38 @@ func (m model) View() string {
 }
 
 func (m model) viewScanning() string {
-	return fmt.Sprintf("%s Scanning...\n  %s",
+	suffix := ""
+	if m.scanStatus != "Scanning..." {
+		suffix = "\n\n"
+	}
+	return fmt.Sprintf("%s  %s\n\n  %s%s",
+		headerStyle.Render("SCANNING:"),
 		m.spinner.View(),
-		dimStyle.Render(m.scanStatus))
+		dimStyle.Render(m.scanStatus),
+		suffix)
 }
 
 func (m model) viewSummary() string {
 	var b strings.Builder
 
 	r := m.scanResult
-	b.WriteString(headerStyle.Render("Scan Results"))
-	b.WriteString(fmt.Sprintf("  %d videos found\n\n",
+	b.WriteString(headerStyle.Render("SCAN RESULTS:"))
+	b.WriteString(fmt.Sprintf(" %d videos found\n\n",
 		len(r.Videos)))
 
-	// Show OK files.
+	// Show stats on one line.
+	var stats []string
 	if r.OKCount > 0 {
-		b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %d fully cached", r.OKCount)))
-		b.WriteString("\n")
+		stats = append(stats, okStyle.Render(fmt.Sprintf("✓ %d fully cached", r.OKCount)))
 	}
 	if r.RenameCount > 0 {
-		b.WriteString(warnStyle.Render(fmt.Sprintf("  ⚠ %d need rename", r.RenameCount)))
-		b.WriteString("\n")
+		stats = append(stats, warnStyle.Render(fmt.Sprintf("⚠ %d need rename", r.RenameCount)))
 	}
 	if r.CacheCount > 0 {
-		b.WriteString(queueStyle.Render(fmt.Sprintf("  ◻ %d need sizes", r.CacheCount)))
-		b.WriteString("\n")
+		stats = append(stats, queueStyle.Render(fmt.Sprintf("◻ %d need sizes", r.CacheCount)))
+	}
+	if len(stats) > 0 {
+		b.WriteString("  " + strings.Join(stats, "   ") + "\n")
 	}
 
 	b.WriteString("\n")
@@ -604,6 +609,7 @@ func (m model) viewSummary() string {
 	// Figure out max widths for alignment of columns on this page.
 	maxSizesW := 0
 	maxCapsW := 0
+	hasScripts := false
 	for i := m.scrollOffset; i < endIdx; i++ {
 		v := r.Videos[i]
 		var sizesB strings.Builder
@@ -618,7 +624,6 @@ func (m model) viewSummary() string {
 			for _, s := range v.MissingSizes {
 				sizesB.WriteString(missingTagStyle.Render(s.Tag))
 			}
-			sizesB.WriteString(dimStyle.Render("(missing)"))
 		}
 		sw := lipgloss.Width(sizesB.String())
 		if sw > maxSizesW {
@@ -627,7 +632,7 @@ func (m model) viewSummary() string {
 
 		var capsB strings.Builder
 		if v.HasCaptionEN || v.HasCaptionDE {
-			capsB.WriteString("  💬 ")
+			capsB.WriteString("  ")
 			if v.HasCaptionEN {
 				capsB.WriteString(ccTagStyle.Render("en"))
 			}
@@ -639,6 +644,37 @@ func (m model) viewSummary() string {
 		if cw > maxCapsW {
 			maxCapsW = cw
 		}
+
+		if v.HasScriptEN || v.HasScriptDE {
+			hasScripts = true
+		}
+	}
+
+	if maxSizesW > 0 && maxSizesW < 7 {
+		maxSizesW = 7
+	}
+	if maxCapsW > 0 && maxCapsW < 10 {
+		maxCapsW = 10
+	}
+
+	// Print Legend Header
+	if endIdx > m.scrollOffset {
+		legendStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666"))
+		headerLine := fmt.Sprintf("        %-30s  %s  %-9s", "Name", " ", "Dims")
+		b.WriteString(legendStyle.Render(headerLine))
+
+		if maxSizesW > 0 {
+			h := "  Sizes"
+			b.WriteString(legendStyle.Render(h + strings.Repeat(" ", maxSizesW-lipgloss.Width(h))))
+		}
+		if maxCapsW > 0 {
+			h := "  Captions"
+			b.WriteString(legendStyle.Render(h + strings.Repeat(" ", maxCapsW-lipgloss.Width(h))))
+		}
+		if hasScripts {
+			b.WriteString(legendStyle.Render("  Scripts"))
+		}
+		b.WriteString("\n")
 	}
 
 	// List each video with status.
@@ -670,15 +706,18 @@ func (m model) viewSummary() string {
 			}
 		}
 
-		line := fmt.Sprintf("%s%s %s %-30s  %s  %-9s",
+		lineBase := fmt.Sprintf("%s%s %s %-30s  ",
 			cursorStr,
 			selStr,
 			icon,
 			truncate(v.Filename, 30),
-			orient,
-			dims,
 		)
-		b.WriteString(style.Render(line))
+		dimsPadded := fmt.Sprintf("%-9s", dims)
+
+		b.WriteString(style.Render(lineBase))
+		b.WriteString(helpStyle.Render(orient))
+		b.WriteString("  ")
+		b.WriteString(helpStyle.Render(dimsPadded))
 
 		var sizesB strings.Builder
 		// Show existing sizes.
@@ -695,7 +734,6 @@ func (m model) viewSummary() string {
 			for _, s := range v.MissingSizes {
 				sizesB.WriteString(missingTagStyle.Render(s.Tag))
 			}
-			sizesB.WriteString(dimStyle.Render("(missing)"))
 		}
 		
 		sizesStr := sizesB.String()
@@ -708,7 +746,7 @@ func (m model) viewSummary() string {
 
 		var capsB strings.Builder
 		if v.HasCaptionEN || v.HasCaptionDE {
-			capsB.WriteString("  💬 ")
+			capsB.WriteString("  ")
 			if v.HasCaptionEN {
 				capsB.WriteString(ccTagStyle.Render("en"))
 			}
@@ -726,7 +764,7 @@ func (m model) viewSummary() string {
 		}
 
 		if v.HasScriptEN || v.HasScriptDE {
-			b.WriteString("  📝 ")
+			b.WriteString("  ")
 			if v.HasScriptEN {
 				b.WriteString(txTagStyle.Render("en"))
 			}
@@ -741,7 +779,7 @@ func (m model) viewSummary() string {
 	if len(r.Videos) > maxVisible {
 		scrollInfo := fmt.Sprintf("  ... viewing %d-%d of %d ...", m.scrollOffset+1, endIdx, len(r.Videos))
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render(scrollInfo))
+		b.WriteString(helpStyle.Render(scrollInfo))
 		b.WriteString("\n")
 	}
 
@@ -751,8 +789,8 @@ func (m model) viewSummary() string {
 func (m model) viewRename() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Rename Files"))
-	b.WriteString(fmt.Sprintf("  %d/%d\n\n", m.renameIdx+1, len(m.renameQueue)))
+	b.WriteString(headerStyle.Render("RENAME FILES:"))
+	b.WriteString(fmt.Sprintf(" %d/%d\n", m.renameIdx+1, len(m.renameQueue)))
 
 	// Show already processed renames.
 	for i := 0; i < m.renameIdx && i < len(m.renameQueue); i++ {
@@ -780,6 +818,7 @@ func (m model) viewRename() string {
 		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("  Resolution: %s (%dx%d)\n", v.ActualRes.Tag, v.Width, v.Height))
 		b.WriteString(fmt.Sprintf("  Path: %s\n", dimStyle.Render(shortenPath(v.Dir))))
+		b.WriteString("\n\n")
 	}
 
 	return b.String()
@@ -788,8 +827,8 @@ func (m model) viewRename() string {
 func (m model) viewConfirmCache() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Confirm Encoding"))
-	b.WriteString(fmt.Sprintf("  %d/%d\n\n", m.confirmIdx+1, len(m.cacheQueue)))
+	b.WriteString(headerStyle.Render("CONFIRM ENCODING:"))
+	b.WriteString(fmt.Sprintf(" %d/%d\n", m.confirmIdx+1, len(m.cacheQueue)))
 
 	// Show already confirmed/skipped.
 	for i := 0; i < m.confirmIdx && i < len(m.cacheQueue); i++ {
@@ -821,6 +860,7 @@ func (m model) viewConfirmCache() string {
 		b.WriteString(fmt.Sprintf("  Resolution: %s (%dx%d) Duration: %.0fs\n",
 			v.ActualRes.Tag, v.Width, v.Height, v.Duration))
 		b.WriteString(fmt.Sprintf("  Path: %s\n", dimStyle.Render(shortenPath(v.Dir))))
+		b.WriteString("\n\n")
 	}
 
 	return b.String()
@@ -829,8 +869,8 @@ func (m model) viewConfirmCache() string {
 func (m model) viewEncoding() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Encoding"))
-	b.WriteString(fmt.Sprintf("  %d/%d jobs\n\n", m.encodeIdx+1, len(m.encodeQueue)))
+	b.WriteString(headerStyle.Render("ENCODING:"))
+	b.WriteString(fmt.Sprintf(" %d/%d jobs\n\n", m.encodeIdx+1, len(m.encodeQueue)))
 
 	// Show completed encodes.
 	for i := 0; i < m.encodeIdx && i < len(m.encodeQueue); i++ {
@@ -876,7 +916,7 @@ func (m model) viewEncoding() string {
 func (m model) viewDone() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Done"))
+	b.WriteString(headerStyle.Render("DONE:"))
 	b.WriteString("\n\n")
 
 	if m.scanResult != nil {
@@ -976,8 +1016,22 @@ func shortenPath(path string) string {
 }
 func newModel(cfg Config) model {
 	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4"))
+	s.Spinner = spinner.Spinner{
+		Frames: []string{
+			"⠋ ⠏ ⠇",
+			"⠙ ⠋ ⠏",
+			"⠹ ⠙ ⠋",
+			"⠸ ⠹ ⠙",
+			"⠼ ⠸ ⠹",
+			"⠴ ⠼ ⠸",
+			"⠦ ⠴ ⠼",
+			"⠧ ⠦ ⠴",
+			"⠇ ⠧ ⠦",
+			"⠏ ⠇ ⠧",
+		},
+		FPS: spinner.Dot.FPS,
+	}
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB347"))
 
 	p := progress.New(
 		progress.WithDefaultGradient(),
