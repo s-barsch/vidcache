@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -8,6 +9,14 @@ import (
 )
 
 func main() {
+	debugMode := flag.Bool("debug", false, "Run debug scan without TUI")
+	flag.Parse()
+
+	if *debugMode {
+		runDebug()
+		return
+	}
+
 	cfg, err := LoadConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)

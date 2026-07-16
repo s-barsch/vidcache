@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-func main() {
+func runDebug() {
 	cfg, err := LoadConfig()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
