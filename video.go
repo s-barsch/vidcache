@@ -1,5 +1,7 @@
 package main
 
+import "os"
+
 // Resolution represents a video quality tier.
 type Resolution struct {
 	Tag    string // "480", "720", "1080", "2k", "4k"
@@ -57,7 +59,7 @@ type VideoStatus int
 const (
 	StatusOK        VideoStatus = iota // fully cached, filename correct
 	StatusNeedsRename                  // filename missing/wrong resolution tag
-	StatusNeedsCache                   // missing sizes need to be generated
+	StatusNeedsCache                   // missing sizes or seek preview need to be generated
 	StatusQueued                       // in the encoding queue
 	StatusEncoding                     // currently being encoded
 	StatusDone                         // encoding finished this session
@@ -112,6 +114,57 @@ type VideoFile struct {
 	HasCaptionDE bool // true if captions/{basename}.de.vtt exists
 	HasScriptEN  bool // true if script/{basename}.en.txt exists
 	HasScriptDE  bool // true if script/{basename}.de.txt exists
+	HasSeek      bool // true if seek/{basename}.vtt and seek/{basename}.jpg exist
+}
+
+// NeedsWork reports whether a size or the seek preview is still missing.
+func (v *VideoFile) NeedsWork() bool {
+	return len(v.MissingSizes) > 0 || !v.HasSeek
+}
+
+// PendingTags lists what is still to be generated, e.g. ["720", "480", "seek"].
+func (v *VideoFile) PendingTags() []string {
+	var tags []string
+	for _, res := range v.MissingSizes {
+		tags = append(tags, res.Tag)
+	}
+	if !v.HasSeek {
+		tags = append(tags, seekTag)
+	}
+	return tags
+}
+
+// SeekDir returns the path to the seek subdirectory.
+func (v *VideoFile) SeekDir() string {
+	return v.Dir + "/" + seekDirName
+}
+
+// SeekTrackPath returns the path of the seek preview's WebVTT track.
+func (v *VideoFile) SeekTrackPath() string {
+	return v.SeekDir() + "/" + v.BaseName + ".vtt"
+}
+
+// SeekSpritePath returns the path of the seek preview's sprite sheet.
+func (v *VideoFile) SeekSpritePath() string {
+	return v.SeekDir() + "/" + v.SeekSpriteFilename()
+}
+
+// SeekSpriteFilename is how the track refers to its sprite: as a sibling file.
+func (v *VideoFile) SeekSpriteFilename() string {
+	return v.BaseName + ".jpg"
+}
+
+// SmallestSource returns the smallest existing sized variant, falling back to
+// the main file, so preview frames are decoded from as few pixels as possible.
+func (v *VideoFile) SmallestSource() string {
+	sizes := SmallerResolutions(v.ActualRes)
+	for i := len(sizes) - 1; i >= 0; i-- {
+		path := v.SizedPath(sizes[i])
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+			return path
+		}
+	}
+	return v.Path
 }
 
 // SizesDir returns the path to the sizes subdirectory.

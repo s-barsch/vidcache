@@ -44,7 +44,7 @@ type encodeStartMsg struct{}
 type encodeProgressMsg struct{ progress EncodeProgress }
 type encodeDoneMsg struct {
 	video *VideoFile
-	res   Resolution
+	tag   string
 	err   error
 }
 type encodeAllDoneMsg struct{}
@@ -121,11 +121,6 @@ type model struct {
 
 	// Error tracking
 	errors []string
-}
-
-type encodeJob struct {
-	video *VideoFile
-	res   Resolution
 }
 
 func (m model) Init() tea.Cmd {
@@ -214,7 +209,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case encodeDoneMsg:
 		if msg.err != nil {
-			errMsg := fmt.Sprintf("%s → %s: %v", msg.video.Filename, msg.res.Tag, msg.err)
+			errMsg := fmt.Sprintf("%s → %s: %v", msg.video.Filename, msg.tag, msg.err)
 			m.errors = append(m.errors, errMsg)
 		}
 		m.encodeIdx++
@@ -355,7 +350,7 @@ func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return renameResultMsg{video: video, err: err}
 		}
 	case "s":
-		if len(video.MissingSizes) > 0 {
+		if video.NeedsWork() {
 			video.Status = StatusNeedsCache
 		} else {
 			video.Status = StatusOK
@@ -380,7 +375,7 @@ func (m model) startCachePhase() (tea.Model, tea.Cmd) {
 	// Build cache queue from all videos that need encoding.
 	m.cacheQueue = nil
 	for i, v := range m.scanResult.Videos {
-		if len(v.MissingSizes) > 0 && v.Status != StatusSkipped && v.Status != StatusError {
+		if v.NeedsWork() && v.Status != StatusSkipped && v.Status != StatusError {
 			if _, ok := m.selected[i]; ok {
 				m.cacheQueue = append(m.cacheQueue, v)
 			}
@@ -439,7 +434,7 @@ func (m model) resetToSummary() (tea.Model, tea.Cmd) {
 			if v.Status == StatusSkipped {
 				if v.NeedsRename {
 					v.Status = StatusNeedsRename
-				} else if len(v.MissingSizes) > 0 {
+				} else if v.NeedsWork() {
 					v.Status = StatusNeedsCache
 				} else {
 					v.Status = StatusOK
@@ -456,9 +451,7 @@ func (m model) startEncoding() (tea.Model, tea.Cmd) {
 		if v.Status == StatusSkipped {
 			continue
 		}
-		for _, res := range v.MissingSizes {
-			m.encodeQueue = append(m.encodeQueue, encodeJob{video: v, res: res})
-		}
+		m.encodeQueue = append(m.encodeQueue, jobsFor(v)...)
 	}
 
 	if len(m.encodeQueue) == 0 {
@@ -487,15 +480,7 @@ func (m model) processNextEncode() (model, tea.Cmd) {
 		errCh := make(chan error, 1)
 
 		go func() {
-			errCh <- Transcode(
-				ctx,
-				job.video.Path,
-				job.video.SizedPath(job.res),
-				job.res.Height,
-				job.video.IsPortrait,
-				job.video.Duration,
-				progressCh,
-			)
+			errCh <- job.Run(ctx, progressCh)
 		}()
 
 		// Forward progress updates to the TUI.
@@ -511,7 +496,7 @@ func (m model) processNextEncode() (model, tea.Cmd) {
 		} else {
 			job.video.Status = StatusError
 		}
-		return encodeDoneMsg{video: job.video, res: job.res, err: err}
+		return encodeDoneMsg{video: job.video, tag: job.Tag(), err: err}
 	}
 }
 
@@ -584,7 +569,7 @@ func (m model) viewSummary() string {
 		stats = append(stats, warnStyle.Render(fmt.Sprintf("⚠ %d need rename", r.RenameCount)))
 	}
 	if r.CacheCount > 0 {
-		stats = append(stats, queueStyle.Render(fmt.Sprintf("◻ %d need sizes", r.CacheCount)))
+		stats = append(stats, queueStyle.Render(fmt.Sprintf("◻ %d need cache", r.CacheCount)))
 	}
 	if len(stats) > 0 {
 		b.WriteString("  ")
@@ -609,20 +594,7 @@ func (m model) viewSummary() string {
 	hasScripts := false
 	for i := m.scrollOffset; i < endIdx; i++ {
 		v := r.Videos[i]
-		var sizesB strings.Builder
-		if len(v.ExistSizes) > 0 {
-			sizesB.WriteString("  ")
-			for _, s := range v.ExistSizes {
-				sizesB.WriteString(existTagStyle.Render(s.Tag))
-			}
-		}
-		if len(v.MissingSizes) > 0 {
-			sizesB.WriteString("  ")
-			for _, s := range v.MissingSizes {
-				sizesB.WriteString(missingTagStyle.Render(s.Tag))
-			}
-		}
-		sw := lipgloss.Width(sizesB.String())
+		sw := lipgloss.Width(sizesColumn(v))
 		if sw > maxSizesW {
 			maxSizesW = sw
 		}
@@ -716,24 +688,7 @@ func (m model) viewSummary() string {
 		b.WriteString("  ")
 		b.WriteString(helpStyle.Render(dimsPadded))
 
-		var sizesB strings.Builder
-		// Show existing sizes.
-		if len(v.ExistSizes) > 0 {
-			sizesB.WriteString("  ")
-			for _, s := range v.ExistSizes {
-				sizesB.WriteString(existTagStyle.Render(s.Tag))
-			}
-		}
-
-		// Show missing sizes.
-		if len(v.MissingSizes) > 0 {
-			sizesB.WriteString("  ")
-			for _, s := range v.MissingSizes {
-				sizesB.WriteString(missingTagStyle.Render(s.Tag))
-			}
-		}
-		
-		sizesStr := sizesB.String()
+		sizesStr := sizesColumn(v)
 		b.WriteString(sizesStr)
 		
 		sizesW := lipgloss.Width(sizesStr)
@@ -834,11 +789,7 @@ func (m model) viewConfirmCache() string {
 			b.WriteString(dimStyle.Render(fmt.Sprintf("  ⊘ %s (skipped)", v.Filename)))
 			b.WriteString("\n")
 		} else {
-			tags := make([]string, len(v.MissingSizes))
-			for j, s := range v.MissingSizes {
-				tags[j] = s.Tag
-			}
-			b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s", v.Filename, strings.Join(tags, ", "))))
+			b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s", v.Filename, strings.Join(v.PendingTags(), ", "))))
 			b.WriteString("\n")
 		}
 	}
@@ -846,13 +797,9 @@ func (m model) viewConfirmCache() string {
 	// Current confirmation prompt.
 	if m.confirmIdx < len(m.cacheQueue) {
 		v := m.cacheQueue[m.confirmIdx]
-		tags := make([]string, len(v.MissingSizes))
-		for i, s := range v.MissingSizes {
-			tags[i] = s.Tag
-		}
 		b.WriteString("\n")
-		b.WriteString(activeStyle.Render(fmt.Sprintf("  Encode %s → sizes: %s ?",
-			v.Filename, strings.Join(tags, ", "))))
+		b.WriteString(activeStyle.Render(fmt.Sprintf("  Encode %s → %s ?",
+			v.Filename, strings.Join(v.PendingTags(), ", "))))
 		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("  Resolution: %s (%dx%d) Duration: %.0fs\n",
 			v.ActualRes.Tag, v.Width, v.Height, v.Duration))
@@ -873,7 +820,7 @@ func (m model) viewEncoding() string {
 	for i := 0; i < m.encodeIdx && i < len(m.encodeQueue); i++ {
 		job := m.encodeQueue[i]
 		b.WriteString(okStyle.Render(fmt.Sprintf("  ✓ %s → %s",
-			job.video.Filename, job.res.Tag)))
+			job.video.Filename, job.Tag())))
 		b.WriteString("\n")
 	}
 
@@ -882,7 +829,7 @@ func (m model) viewEncoding() string {
 		job := m.encodeQueue[m.encodeIdx]
 		b.WriteString("\n")
 		b.WriteString(activeStyle.Render(fmt.Sprintf("  ▶ %s → %s",
-			job.video.Filename, job.res.Tag)))
+			job.video.Filename, job.Tag())))
 		b.WriteString("\n")
 		b.WriteString(fmt.Sprintf("  %s %.0f%%",
 			m.progressBar.View(),
@@ -901,7 +848,7 @@ func (m model) viewEncoding() string {
 		for i := m.encodeIdx + 1; i < len(m.encodeQueue) && i < m.encodeIdx+26; i++ {
 			job := m.encodeQueue[i]
 			b.WriteString(queueStyle.Render(fmt.Sprintf("  ◻ %s → %s",
-				job.video.Filename, job.res.Tag)))
+				job.video.Filename, job.Tag())))
 			b.WriteString("\n")
 		}
 		if remaining > 25 {
@@ -975,6 +922,31 @@ func (m model) startScan() tea.Cmd {
 		}
 		return scanDoneMsg{result: result}
 	}
+}
+
+// sizesColumn renders the existing sizes, the missing ones, and whether the
+// seek preview is there, e.g. "  1080 720  480  seek".
+func sizesColumn(v *VideoFile) string {
+	var b strings.Builder
+	if len(v.ExistSizes) > 0 {
+		b.WriteString("  ")
+		for _, s := range v.ExistSizes {
+			b.WriteString(existTagStyle.Render(s.Tag))
+		}
+	}
+	if len(v.MissingSizes) > 0 {
+		b.WriteString("  ")
+		for _, s := range v.MissingSizes {
+			b.WriteString(missingTagStyle.Render(s.Tag))
+		}
+	}
+	b.WriteString("  ")
+	if v.HasSeek {
+		b.WriteString(existTagStyle.Render(seekTag))
+	} else {
+		b.WriteString(missingTagStyle.Render(seekTag))
+	}
+	return b.String()
 }
 
 func statusIcon(s VideoStatus) (string, lipgloss.Style) {

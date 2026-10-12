@@ -41,8 +41,8 @@ func ScanVideos(cachePath string, progressFn func(msg string)) (*ScanResult, err
 			if name == "bot" || name == ".bot" {
 				return filepath.SkipDir
 			}
-			// Skip sizes directories — those are output, not input.
-			if name == "sizes" {
+			// Skip sizes and seek directories — those are output, not input.
+			if name == "sizes" || name == seekDirName {
 				return filepath.SkipDir
 			}
 			return nil
@@ -171,6 +171,8 @@ func analyzeVideo(path string) (*VideoFile, error) {
 		video.HasScriptDE = true
 	}
 
+	// Check for the seek preview: the track counts only beside its sprite.
+	video.HasSeek = isRegularFile(video.SeekTrackPath()) && isRegularFile(video.SeekSpritePath())
 
 	// Check if filename has the correct resolution tag.
 	if currentTag != actualRes.Tag {
@@ -205,13 +207,18 @@ func analyzeVideo(path string) (*VideoFile, error) {
 	// Determine final status.
 	if video.NeedsRename {
 		video.Status = StatusNeedsRename
-	} else if len(video.MissingSizes) > 0 {
+	} else if video.NeedsWork() {
 		video.Status = StatusNeedsCache
 	} else {
 		video.Status = StatusOK
 	}
 
 	return video, nil
+}
+
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // parseResolutionTag splits "240813_121003-4k" into ("240813_121003", "4k").
@@ -244,7 +251,7 @@ func RenameVideo(video *VideoFile) error {
 	video.NeedsRename = false
 
 	// Re-evaluate status.
-	if len(video.MissingSizes) > 0 {
+	if video.NeedsWork() {
 		video.Status = StatusNeedsCache
 	} else {
 		video.Status = StatusOK
