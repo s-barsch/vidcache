@@ -16,6 +16,41 @@ type ScanResult struct {
 	Errors     []string
 }
 
+// ScanScope resolves what a scan covers: the whole cache, or the folder named
+// by arg, which has to be inside it. A file stands for the folder it is in,
+// so a scan always sees every video next to a sizes directory and the dims
+// files it finds there without a video are really orphaned.
+func ScanScope(cachePath, arg string) (string, error) {
+	root, err := filepath.EvalSymlinks(cachePath)
+	if err != nil {
+		return "", fmt.Errorf("resolving cache path %s: %w", cachePath, err)
+	}
+	if arg == "" {
+		return root, nil
+	}
+
+	scope, err := filepath.Abs(arg)
+	if err == nil {
+		scope, err = filepath.EvalSymlinks(scope)
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolving %s: %w", arg, err)
+	}
+	rel, err := filepath.Rel(root, scope)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s is not in the cache %s", arg, root)
+	}
+
+	info, err := os.Stat(scope)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		scope = filepath.Dir(scope)
+	}
+	return scope, nil
+}
+
 // ScanVideos walks the cache directory and discovers all main mp4 files,
 // probes their resolution, checks filename conventions, and determines
 // which sizes are missing.

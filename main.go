@@ -9,6 +9,10 @@ import (
 )
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "usage: vidcache [-headless] [path]\n\npath limits the scan to a folder in the cache, or the folder a file is in.\n\n")
+		flag.PrintDefaults()
+	}
 	headless := flag.Bool("headless", false, "encode every missing size without the TUI, printing plain lines")
 	flag.Parse()
 
@@ -18,15 +22,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	scope, err := ScanScope(cfg.CachePath, flag.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	if *headless {
-		if err := runHeadless(cfg); err != nil {
+		if err := runHeadless(cfg, scope); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	m := newModel(cfg)
+	m := newModel(cfg, scope)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	// Store program reference so encoding can send progress messages.

@@ -90,6 +90,7 @@ var (
 
 type model struct {
 	cfg    Config
+	scope  string
 	phase  phase
 	width  int
 	height int
@@ -912,7 +913,7 @@ func (m model) helpText() string {
 
 func (m model) startScan() tea.Cmd {
 	return func() tea.Msg {
-		result, err := ScanVideos(m.cfg.CachePath, func(msg string) {
+		result, err := ScanVideos(m.scope, func(msg string) {
 			// Note: we can't send messages from inside Walk easily
 			// without a program reference. The scan is fast enough
 			// that we just show the spinner.
@@ -986,7 +987,7 @@ func shortenPath(path string) string {
 	}
 	return rel
 }
-func newModel(cfg Config) model {
+func newModel(cfg Config, scope string) model {
 	s := spinner.New()
 	s.Spinner = spinner.Spinner{
 		Frames: []string{
@@ -1012,6 +1013,7 @@ func newModel(cfg Config) model {
 
 	return model{
 		cfg:         cfg,
+		scope:       scope,
 		phase:       phaseScanning,
 		spinner:     s,
 		progressBar: p,
