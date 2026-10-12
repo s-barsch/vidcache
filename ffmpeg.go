@@ -104,11 +104,26 @@ func Transcode(ctx context.Context, src, dst string, targetHeight int, isPortrai
 		"-crf", "23",
 		"-c:a", "copy",
 		"-movflags", "+faststart",
-		"-progress", "pipe:1",
-		"-nostats",
 		"-y",
 		tmpDst,
 	}
+
+	if err := runFFmpeg(ctx, args, duration, progressCh); err != nil {
+		return err
+	}
+
+	// Move temp file to final destination.
+	if err := os.Rename(tmpDst, dst); err != nil {
+		return fmt.Errorf("moving encoded file: %w", err)
+	}
+
+	return nil
+}
+
+// runFFmpeg runs ffmpeg with args and sends its progress on progressCh,
+// measured against duration, until it exits.
+func runFFmpeg(ctx context.Context, args []string, duration float64, progressCh chan<- EncodeProgress) error {
+	args = append([]string{"-progress", "pipe:1", "-nostats"}, args...)
 
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	cmd.Stderr = nil // suppress ffmpeg stderr noise
@@ -161,11 +176,6 @@ func Transcode(ctx context.Context, src, dst string, targetHeight int, isPortrai
 
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("ffmpeg encoding failed: %w", err)
-	}
-
-	// Move temp file to final destination.
-	if err := os.Rename(tmpDst, dst); err != nil {
-		return fmt.Errorf("moving encoded file: %w", err)
 	}
 
 	return nil

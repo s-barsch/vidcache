@@ -41,22 +41,19 @@ func runHeadless(cfg Config) error {
 		if v.NeedsRename {
 			fmt.Printf("needs rename: %s → %s\n", rel(v.Path), v.CorrectFilename())
 		}
-		for _, res := range v.MissingSizes {
-			jobs = append(jobs, encodeJob{video: v, res: res})
-		}
+		jobs = append(jobs, jobsFor(v)...)
 	}
-	fmt.Printf("%d videos, %d sizes to encode\n", len(result.Videos), len(jobs))
+	fmt.Printf("%d videos, %d jobs to run\n", len(result.Videos), len(jobs))
 
 	failed := len(result.Errors)
 	for i, job := range jobs {
-		fmt.Printf("[%d/%d] %s → %s\n", i+1, len(jobs), rel(job.video.Path), job.res.Tag)
+		fmt.Printf("[%d/%d] %s → %s\n", i+1, len(jobs), rel(job.video.Path), job.Tag())
 		start := time.Now()
 
 		progressCh := make(chan EncodeProgress, 10)
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- Transcode(ctx, job.video.Path, job.video.SizedPath(job.res),
-				job.res.Height, job.video.IsPortrait, job.video.Duration, progressCh)
+			errCh <- job.Run(ctx, progressCh)
 		}()
 		quarter := 0
 		for p := range progressCh {
@@ -68,7 +65,7 @@ func runHeadless(cfg Config) error {
 
 		if err := <-errCh; err != nil {
 			if ctx.Err() != nil {
-				return fmt.Errorf("stopped during %s", rel(job.video.SizedPath(job.res)))
+				return fmt.Errorf("stopped during %s", rel(job.Target()))
 			}
 			failed++
 			fmt.Printf("  error: %v\n", err)
