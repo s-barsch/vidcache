@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-// runHeadless encodes every missing size without asking and prints one plain
-// line per step. Renames are reported but left for the TUI.
-func runHeadless(cfg Config) error {
+// runHeadless encodes every missing size in scope without asking and prints
+// one plain line per step. Renames are reported but left for the TUI.
+func runHeadless(cfg Config, scope string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -27,8 +27,8 @@ func runHeadless(cfg Config) error {
 		return path
 	}
 
-	fmt.Printf("scanning %s\n", root)
-	result, err := ScanVideos(root, nil)
+	fmt.Printf("scanning %s\n", scope)
+	result, err := ScanVideos(scope, nil)
 	if err != nil {
 		return err
 	}
