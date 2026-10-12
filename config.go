@@ -41,6 +41,9 @@ func LoadConfig() (Config, error) {
 			if _, err := toml.DecodeFile(p, &cfg); err != nil {
 				return cfg, fmt.Errorf("parsing config %s: %w", p, err)
 			}
+			if !filepath.IsAbs(cfg.CachePath) {
+				cfg.CachePath = filepath.Join(filepath.Dir(p), cfg.CachePath)
+			}
 			return cfg, nil
 		}
 	}
