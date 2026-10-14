@@ -926,7 +926,7 @@ func (m model) startScan() tea.Cmd {
 }
 
 // sizesColumn renders the existing sizes, the missing ones, and whether the
-// seek preview is there, e.g. "  1080 720  480  seek".
+// seek preview and the HLS ladder are there, e.g. "  1080 720  480  seek hls".
 func sizesColumn(v *VideoFile) string {
 	var b strings.Builder
 	if len(v.ExistSizes) > 0 {
@@ -946,6 +946,11 @@ func sizesColumn(v *VideoFile) string {
 		b.WriteString(existTagStyle.Render(seekTag))
 	} else {
 		b.WriteString(missingTagStyle.Render(seekTag))
+	}
+	if v.HasHLS {
+		b.WriteString(existTagStyle.Render(hlsTag))
+	} else {
+		b.WriteString(missingTagStyle.Render(hlsTag))
 	}
 	return b.String()
 }

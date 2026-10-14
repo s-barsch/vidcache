@@ -76,8 +76,8 @@ func ScanVideos(cachePath string, progressFn func(msg string)) (*ScanResult, err
 			if name == "bot" || name == ".bot" {
 				return filepath.SkipDir
 			}
-			// Skip sizes and seek directories — those are output, not input.
-			if name == "sizes" || name == seekDirName {
+			// Skip sizes, seek and hls directories — those are output, not input.
+			if name == "sizes" || name == seekDirName || name == hlsDirName {
 				return filepath.SkipDir
 			}
 			return nil
@@ -186,6 +186,7 @@ func analyzeVideo(path string) (*VideoFile, error) {
 		Width:            probe.Width,
 		Height:           probe.Height,
 		Duration:         probe.Duration,
+		HasAudio:         probe.HasAudio,
 	}
 
 	// Check for captions
@@ -208,6 +209,9 @@ func analyzeVideo(path string) (*VideoFile, error) {
 
 	// Check for the seek preview: the track counts only beside its sprite.
 	video.HasSeek = isRegularFile(video.SeekTrackPath()) && isRegularFile(video.SeekSpritePath())
+
+	// The master playlist is written last, so it stands for the whole ladder.
+	video.HasHLS = isRegularFile(video.HLSPlaylistPath())
 
 	// Check if filename has the correct resolution tag.
 	if currentTag != actualRes.Tag {

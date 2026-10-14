@@ -16,16 +16,17 @@ type probeResult struct {
 	Width    int
 	Height   int
 	Duration float64
+	HasAudio bool
 }
 
-// Probe calls ffprobe to get video dimensions and duration.
+// Probe calls ffprobe to get video dimensions, duration, and whether there is
+// sound.
 func Probe(path string) (probeResult, error) {
 	cmd := exec.Command("ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
-		"-show_entries", "stream=width,height",
+		"-show_entries", "stream=codec_type,width,height",
 		"-show_entries", "format=duration",
-		"-select_streams", "v:0",
 		path,
 	)
 
@@ -36,8 +37,9 @@ func Probe(path string) (probeResult, error) {
 
 	var data struct {
 		Streams []struct {
-			Width  int `json:"width"`
-			Height int `json:"height"`
+			CodecType string `json:"codec_type"`
+			Width     int    `json:"width"`
+			Height    int    `json:"height"`
 		} `json:"streams"`
 		Format struct {
 			Duration string `json:"duration"`
@@ -48,17 +50,25 @@ func Probe(path string) (probeResult, error) {
 		return probeResult{}, fmt.Errorf("parsing ffprobe output for %s: %w", path, err)
 	}
 
-	if len(data.Streams) == 0 {
+	var result probeResult
+	foundVideo := false
+	for _, s := range data.Streams {
+		switch {
+		case s.CodecType == "video" && !foundVideo:
+			result.Width, result.Height = s.Width, s.Height
+			foundVideo = true
+		case s.CodecType == "audio":
+			result.HasAudio = true
+		}
+	}
+
+	if !foundVideo {
 		return probeResult{}, fmt.Errorf("no video stream found in %s", path)
 	}
 
-	dur, _ := strconv.ParseFloat(data.Format.Duration, 64)
+	result.Duration, _ = strconv.ParseFloat(data.Format.Duration, 64)
 
-	return probeResult{
-		Width:    data.Streams[0].Width,
-		Height:   data.Streams[0].Height,
-		Duration: dur,
-	}, nil
+	return result, nil
 }
 
 // EncodeProgress is sent on the progress channel during transcoding.
@@ -79,26 +89,13 @@ func Transcode(ctx context.Context, src, dst string, targetHeight int, isPortrai
 		return fmt.Errorf("creating sizes dir: %w", err)
 	}
 
-	// Build the scale filter based on orientation.
-	// -2 ensures the other dimension is divisible by 2 (required by most codecs).
-	var scaleFilter string
-	if isPortrait {
-		// Portrait: the resolution tag refers to the width.
-		// e.g. -720 on a 1080×1920 portrait → 720×1280.
-		scaleFilter = fmt.Sprintf("scale=%d:-2", targetHeight)
-	} else {
-		// Landscape: the resolution tag refers to the height.
-		// e.g. -1080 on a 3840×2160 landscape → 1920×1080.
-		scaleFilter = fmt.Sprintf("scale=-2:%d", targetHeight)
-	}
-
 	// Use a temp file to avoid partial outputs.
 	tmpDst := dst + ".tmp.mp4"
 	defer os.Remove(tmpDst)
 
 	args := []string{
 		"-i", src,
-		"-vf", scaleFilter,
+		"-vf", scaleFilter(targetHeight, isPortrait),
 		"-c:v", "libx264",
 		"-preset", "fast",
 		"-crf", "23",
@@ -118,6 +115,19 @@ func Transcode(ctx context.Context, src, dst string, targetHeight int, isPortrai
 	}
 
 	return nil
+}
+
+// scaleFilter scales to a resolution tier, preserving orientation.
+// -2 ensures the other dimension is divisible by 2 (required by most codecs).
+func scaleFilter(targetHeight int, isPortrait bool) string {
+	if isPortrait {
+		// Portrait: the resolution tag refers to the width.
+		// e.g. -720 on a 1080×1920 portrait → 720×1280.
+		return fmt.Sprintf("scale=%d:-2", targetHeight)
+	}
+	// Landscape: the resolution tag refers to the height.
+	// e.g. -1080 on a 3840×2160 landscape → 1920×1080.
+	return fmt.Sprintf("scale=-2:%d", targetHeight)
 }
 
 // runFFmpeg runs ffmpeg with args and sends its progress on progressCh,

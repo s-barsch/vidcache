@@ -4,17 +4,18 @@ import "os"
 
 // Resolution represents a video quality tier.
 type Resolution struct {
-	Tag    string // "480", "720", "1080", "2k", "4k"
-	Height int    // 480, 720, 1080, 1440, 2160
+	Tag     string // "480", "720", "1080", "2k", "4k"
+	Height  int    // 480, 720, 1080, 1440, 2160
+	MaxRate int    // kbit/s ceiling of the HLS rendition
 }
 
 // AllResolutions in descending order.
 var AllResolutions = []Resolution{
-	{Tag: "4k", Height: 2160},
-	{Tag: "2k", Height: 1440},
-	{Tag: "1080", Height: 1080},
-	{Tag: "720", Height: 720},
-	{Tag: "480", Height: 480},
+	{Tag: "4k", Height: 2160, MaxRate: 20000},
+	{Tag: "2k", Height: 1440, MaxRate: 12000},
+	{Tag: "1080", Height: 1080, MaxRate: 6000},
+	{Tag: "720", Height: 720, MaxRate: 3500},
+	{Tag: "480", Height: 480, MaxRate: 1500},
 }
 
 // ResolutionByTag returns the Resolution for a given tag string.
@@ -103,7 +104,8 @@ type VideoFile struct {
 	Width            int          // pixel width
 	Height           int          // pixel height
 	Duration         float64      // duration in seconds
-	ExistSizes       []Resolution // which resized mp4s exist in "sizes/"
+	HasAudio         bool         // true if the file has an audio stream
+	ExistSizes      []Resolution // which resized mp4s exist in "sizes/"
 	MissingSizes     []Resolution // which resized mp4s are missing
 	NeedsRename      bool         // true if filename needs to be corrected
 	Status           VideoStatus  // current status in the pipeline
@@ -115,14 +117,16 @@ type VideoFile struct {
 	HasScriptEN  bool // true if script/{basename}.en.txt exists
 	HasScriptDE  bool // true if script/{basename}.de.txt exists
 	HasSeek      bool // true if seek/{basename}.vtt and seek/{basename}.jpg exist
+	HasHLS       bool // true if hls/{basename}.m3u8 exists
 }
 
-// NeedsWork reports whether a size or the seek preview is still missing.
+// NeedsWork reports whether a size, the seek preview or the HLS ladder is
+// still missing.
 func (v *VideoFile) NeedsWork() bool {
-	return len(v.MissingSizes) > 0 || !v.HasSeek
+	return len(v.MissingSizes) > 0 || !v.HasSeek || !v.HasHLS
 }
 
-// PendingTags lists what is still to be generated, e.g. ["720", "480", "seek"].
+// PendingTags lists what is still to be generated, e.g. ["720", "480", "seek", "hls"].
 func (v *VideoFile) PendingTags() []string {
 	var tags []string
 	for _, res := range v.MissingSizes {
@@ -130,6 +134,9 @@ func (v *VideoFile) PendingTags() []string {
 	}
 	if !v.HasSeek {
 		tags = append(tags, seekTag)
+	}
+	if !v.HasHLS {
+		tags = append(tags, hlsTag)
 	}
 	return tags
 }
