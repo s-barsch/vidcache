@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -118,17 +119,19 @@ func ScanVideos(cachePath string, progressFn func(msg string)) (*ScanResult, err
 		}
 	}
 
-	// Clean up orphaned dims files.
+	// Clean up orphaned metadata files.
 	if progressFn != nil {
 		progressFn("Cleaning up orphaned metadata...")
 	}
 
-	validDimsFiles := make(map[string]bool)
+	validMetaFiles := make(map[string]bool)
 	sizesDirs := make(map[string]bool)
 	for _, v := range result.Videos {
 		sDir := filepath.Join(v.Dir, "sizes")
 		sizesDirs[sDir] = true
-		validDimsFiles[filepath.Join(sDir, v.BaseName+".dims.txt")] = true
+		for _, suffix := range metaSuffixes {
+			validMetaFiles[filepath.Join(sDir, v.BaseName+suffix)] = true
+		}
 	}
 
 	for sDir := range sizesDirs {
@@ -137,9 +140,9 @@ func ScanVideos(cachePath string, progressFn func(msg string)) (*ScanResult, err
 			continue
 		}
 		for _, e := range entries {
-			if !e.IsDir() && strings.HasSuffix(e.Name(), ".dims.txt") {
+			if !e.IsDir() && isMetaFile(e.Name()) {
 				fullPath := filepath.Join(sDir, e.Name())
-				if !validDimsFiles[fullPath] {
+				if !validMetaFiles[fullPath] {
 					os.Remove(fullPath)
 				}
 			}
@@ -147,6 +150,36 @@ func ScanVideos(cachePath string, progressFn func(msg string)) (*ScanResult, err
 	}
 
 	return result, nil
+}
+
+const (
+	dimsSuffix     = ".dims.txt"
+	durationSuffix = ".duration.txt"
+)
+
+var metaSuffixes = []string{dimsSuffix, durationSuffix}
+
+func isMetaFile(name string) bool {
+	for _, suffix := range metaSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// writeMetaFile writes content to metaPath unless it already exists and is
+// newer than the video it describes.
+func writeMetaFile(videoPath, metaPath, content string) {
+	videoStat, err := os.Stat(videoPath)
+	if err != nil {
+		return
+	}
+	if metaStat, err := os.Stat(metaPath); err == nil && !metaStat.ModTime().Before(videoStat.ModTime()) {
+		return
+	}
+	os.MkdirAll(filepath.Dir(metaPath), 0755)
+	os.WriteFile(metaPath, []byte(content), 0644)
 }
 
 // analyzeVideo probes a single video file and determines its state.
@@ -219,15 +252,12 @@ func analyzeVideo(path string) (*VideoFile, error) {
 	smallerSizes := SmallerResolutions(actualRes)
 	sizesDir := filepath.Join(dir, "sizes")
 
-	// Ensure dimensions file exists or update it if older than mp4.
-	dimsPath := filepath.Join(sizesDir, baseName+".dims.txt")
-	if mp4Stat, err := os.Stat(path); err == nil {
-		dimsStat, err := os.Stat(dimsPath)
-		if err != nil || dimsStat.ModTime().Before(mp4Stat.ModTime()) {
-			os.MkdirAll(sizesDir, 0755)
-			dimsContent := fmt.Sprintf("%dx%d", probe.Width, probe.Height)
-			os.WriteFile(dimsPath, []byte(dimsContent), 0644)
-		}
+	// Ensure the metadata files exist or update them if older than mp4.
+	writeMetaFile(path, filepath.Join(sizesDir, baseName+dimsSuffix),
+		fmt.Sprintf("%dx%d", probe.Width, probe.Height))
+	if probe.Duration > 0 {
+		writeMetaFile(path, filepath.Join(sizesDir, baseName+durationSuffix),
+			strconv.FormatFloat(probe.Duration, 'f', -1, 64))
 	}
 
 	for _, res := range smallerSizes {
